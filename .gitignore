@@ -13,4 +13,6 @@ Desktop.ini
 
 # Generated prompt downloads
 silk-test-prompt-*.txt
+
+# Local helper scripts (not part of the application)
 push-to-github.ps1
