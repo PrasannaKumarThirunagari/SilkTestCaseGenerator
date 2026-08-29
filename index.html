@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Silk Test Case Prompt Builder</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="app-header">
+  <div class="app-header__inner">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">ST</span>
+      <span class="brand__text">
+        <span class="brand__title">Silk Test Case Prompt Builder</span>
+        <span class="brand__subtitle">Structured input &rarr; AI prompt. This tool builds the prompt; another AI writes the Silk&nbsp;Test case.</span>
+      </span>
+    </div>
+
+    <div class="header-actions" role="group" aria-label="Sample data and reset">
+      <button type="button" class="btn btn--ghost" id="btn-sample-outlook">
+        <span class="btn__icon" aria-hidden="true">&#9993;</span> Outlook Sample
+      </button>
+      <button type="button" class="btn btn--ghost" id="btn-sample-teams">
+        <span class="btn__icon" aria-hidden="true">&#128172;</span> Teams Sample
+      </button>
+      <button type="button" class="btn btn--danger-ghost" id="btn-reset">
+        <span class="btn__icon" aria-hidden="true">&#8635;</span> Reset all
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="layout" id="main">
+
+  <!-- ==================================================================== -->
+  <!-- LEFT: FORM                                                            -->
+  <!-- ==================================================================== -->
+  <div class="layout__form">
+
+    <!-- A. TEST CONTEXT -->
+    <section class="card" aria-labelledby="h-context">
+      <div class="card__head">
+        <h2 class="card__title" id="h-context"><span class="card__step">A</span> Test Context</h2>
+        <p class="card__hint">What is being tested, and against which reference material.</p>
+      </div>
+      <div class="card__body">
+        <div class="grid grid--2">
+          <div class="field">
+            <label class="field__label" for="cbx-target-application-input">Target application</label>
+            <div class="field__control" data-cbx id="cbx-target-application"></div>
+            <p class="field__help">Pick from the list or type your own value.</p>
+          </div>
+          <div class="field">
+            <label class="field__label" for="cbx-reference-file-input">Reference filename</label>
+            <div class="field__control" data-cbx id="cbx-reference-file"></div>
+            <p class="field__help">Document or sheet the downstream AI should rely on.</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="user-story">User story description</label>
+          <textarea id="user-story" class="textarea" rows="4"
+            placeholder="As a user, I want to ... so that ..."></textarea>
+          <p class="field__help">Describe the business intent. This becomes the objective of the generated test case.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- B. NAVIGATION STEPS -->
+    <section class="card" aria-labelledby="h-nav">
+      <div class="card__head">
+        <h2 class="card__title" id="h-nav"><span class="card__step">B</span> Navigation Steps</h2>
+        <p class="card__hint">How the tester reaches the area under test. Order is generated automatically.</p>
+      </div>
+      <div class="card__body">
+        <div class="table-wrap">
+          <table class="rows" id="nav-table">
+            <caption class="sr-only">Navigation steps, in execution order</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="col-order">Order</th>
+                <th scope="col">Action</th>
+                <th scope="col">Target</th>
+                <th scope="col" class="col-controls"><span class="sr-only">Row controls</span></th>
+              </tr>
+            </thead>
+            <tbody id="nav-body"></tbody>
+          </table>
+        </div>
+        <div class="row-actions">
+          <button type="button" class="btn btn--secondary" id="btn-add-nav">
+            <span class="btn__icon" aria-hidden="true">+</span> Add step
+          </button>
+          <span class="counter" id="nav-count" aria-live="polite"></span>
+        </div>
+
+        <div class="field field--tight">
+          <span class="field__label" id="nav-path-label">Navigation path <span class="badge badge--auto">auto</span></span>
+          <div class="path" id="nav-path" role="group" aria-labelledby="nav-path-label" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- C. SILKCENTRAL STEPS -->
+    <section class="card" aria-labelledby="h-silk">
+      <div class="card__head">
+        <h2 class="card__title" id="h-silk"><span class="card__step">C</span> SilkCentral Steps</h2>
+        <p class="card__hint">Keyword / command information the generated test case must use. Nothing here is executed.</p>
+      </div>
+      <div class="card__body">
+        <div class="table-wrap">
+          <table class="rows" id="silk-table">
+            <caption class="sr-only">SilkCentral steps, in execution order</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="col-order">Order</th>
+                <th scope="col">Command value</th>
+                <th scope="col">Name</th>
+                <th scope="col" class="col-controls"><span class="sr-only">Row controls</span></th>
+              </tr>
+            </thead>
+            <tbody id="silk-body"></tbody>
+          </table>
+        </div>
+        <div class="row-actions">
+          <button type="button" class="btn btn--secondary" id="btn-add-silk">
+            <span class="btn__icon" aria-hidden="true">+</span> Add step
+          </button>
+          <span class="counter" id="silk-count" aria-live="polite"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- D. VERIFICATION EVIDENCE -->
+    <section class="card" aria-labelledby="h-verify">
+      <div class="card__head">
+        <h2 class="card__title" id="h-verify"><span class="card__step">D</span> Verification Evidence</h2>
+        <p class="card__hint">What the generated test case must check, how, and what counts as a pass.</p>
+      </div>
+      <div class="card__body">
+        <div class="grid grid--2">
+          <div class="field">
+            <label class="field__label" for="cbx-verification-operation-input">Verification operation</label>
+            <div class="field__control" data-cbx id="cbx-verification-operation"></div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="cbx-control-access-input">Control access</label>
+            <div class="field__control" data-cbx id="cbx-control-access"></div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="cbx-control-type-input">Control type</label>
+            <div class="field__control" data-cbx id="cbx-control-type"></div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="cbx-expected-value-input">Expected value</label>
+            <div class="field__control" data-cbx id="cbx-expected-value"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="acceptance">Expected results / acceptance criteria</label>
+          <textarea id="acceptance" class="textarea" rows="5"
+            placeholder="One criterion per line. Example:&#10;The attachment opens without error.&#10;The displayed filename matches the expected report name."></textarea>
+          <p class="field__help">Each line becomes a numbered acceptance criterion in the prompt.</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ==================================================================== -->
+  <!-- RIGHT: GENERATED PROMPT                                               -->
+  <!-- ==================================================================== -->
+  <aside class="layout__output" aria-labelledby="h-prompt">
+    <div class="panel">
+      <div class="panel__head">
+        <div class="panel__titles">
+          <h2 class="panel__title" id="h-prompt">Generated prompt</h2>
+          <p class="panel__meta"><span id="char-count">0 chars</span><span class="dot" aria-hidden="true">&middot;</span><span id="ready-state">Waiting for input</span></p>
+        </div>
+        <div class="panel__actions">
+          <button type="button" class="btn btn--secondary" id="btn-copy">
+            <span class="btn__icon" aria-hidden="true">&#10697;</span> <span class="btn__label">Copy</span>
+          </button>
+          <button type="button" class="btn btn--primary" id="btn-download">
+            <span class="btn__icon" aria-hidden="true">&#8595;</span> <span class="btn__label">Download</span>
+          </button>
+        </div>
+      </div>
+      <div class="panel__body">
+        <pre class="prompt" id="prompt-output" tabindex="0" aria-label="Generated prompt text"></pre>
+      </div>
+      <div class="panel__foot">
+        <p class="panel__note">This prompt is the deliverable. Paste it into an AI assistant to have the Silk Test case generated.</p>
+      </div>
+    </div>
+  </aside>
+
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="dataloads.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
