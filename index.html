@@ -48,6 +48,15 @@
         <p class="card__hint">What is being tested, and against which reference material.</p>
       </div>
       <div class="card__body">
+        <div class="field">
+          <label class="field__label" for="test-case-name">Test case name</label>
+          <input type="text" id="test-case-name" class="input" autocomplete="off" spellcheck="false"
+            aria-describedby="test-case-name-help">
+          <p class="field__help" id="test-case-name-help">
+            Leave blank and the name shown above is used, built from the target application and the current time.
+          </p>
+        </div>
+
         <div class="grid grid--2">
           <div class="field">
             <label class="field__label" for="cbx-target-application-input">Target application</label>
@@ -77,6 +86,32 @@
         <p class="card__hint">How the tester reaches the area under test. Order is generated automatically.</p>
       </div>
       <div class="card__body">
+        <div class="field">
+          <label class="field__label" for="cbx-quick-nav-input">Quick navigation</label>
+          <div class="field__control" data-cbx id="cbx-quick-nav"></div>
+          <p class="field__help">Pick a common flow to insert its steps into the tables below — fills the SilkCentral command value and name too.</p>
+        </div>
+
+        <div class="toolbar">
+          <div class="field toolbar__search">
+            <label class="field__label" for="nav-search">Search navigation steps</label>
+            <div class="search-field">
+              <input type="text" id="nav-search" class="input" autocomplete="off" spellcheck="false"
+                placeholder="Filter by action or target…">
+              <button type="button" class="search-field__clear" id="btn-nav-search-clear" aria-label="Clear navigation search" hidden>×</button>
+            </div>
+          </div>
+          <div class="toolbar__toggle">
+            <span class="field__label toolbar__toggle-label" id="toggle-duplicates-label">View</span>
+            <button type="button" class="btn btn--secondary btn--toggle" id="btn-toggle-duplicates"
+              aria-pressed="false" aria-labelledby="toggle-duplicates-label btn-toggle-duplicates-text">
+              <span class="btn__icon" aria-hidden="true">⧉</span>
+              <span id="btn-toggle-duplicates-text">Highlight duplicates</span>
+            </button>
+          </div>
+        </div>
+        <p class="table-empty" id="nav-search-empty" hidden>No navigation steps match your search.</p>
+
         <div class="table-wrap">
           <table class="rows" id="nav-table">
             <caption class="sr-only">Navigation steps, in execution order</caption>
@@ -209,6 +244,7 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script src="quicknav.js"></script>
 <script src="dataloads.js"></script>
 <script src="script.js"></script>
 </body>

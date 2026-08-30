@@ -37,6 +37,10 @@
   --warn-soft:     #fdf6e7;
   --warn-ring:     rgba(217, 164, 65, .30);
 
+  --dup:           #7c5cbf;
+  --dup-soft:      #f2eefc;
+  --dup-ring:      rgba(124, 92, 191, .28);
+
   --radius-sm: 5px;
   --radius:    8px;
   --radius-lg: 12px;
@@ -280,6 +284,23 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .badge--auto { background: var(--accent-soft); color: var(--accent); }
 
+.input {
+  width: 100%;
+  height: var(--control-h);
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.input::placeholder { color: var(--text-faint); font-style: italic; }
+.input:hover { border-color: var(--text-faint); }
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
 .textarea {
   width: 100%;
   min-height: 84px;
@@ -298,6 +319,60 @@ button, input, textarea { font: inherit; color: inherit; }
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-ring);
 }
+
+/* ---------------------------------------------------------------- toolbar */
+.toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.toolbar__search { flex: 1 1 240px; min-width: 0; }
+.toolbar__toggle { flex: none; display: flex; flex-direction: column; gap: 6px; }
+.toolbar__toggle-label { visibility: hidden; }  /* reserves the same baseline as the search label above the button */
+
+.search-field { position: relative; }
+
+.search-field .input { padding-right: 30px; }
+
+.search-field__clear {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.search-field__clear:hover { color: var(--text); background: var(--bg-inset); }
+.search-field__clear[hidden] { display: none; }
+
+.btn--toggle[aria-pressed="true"] {
+  background: var(--dup);
+  border-color: var(--dup);
+  color: var(--text-invert);
+}
+.btn--toggle[aria-pressed="true"]:hover { background: var(--dup); border-color: var(--dup); }
+
+.table-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 2px 0;
+}
+.table-empty[hidden] { display: none; }
+
+/* Row whose Action + Target combination repeats elsewhere in the table */
+.rows tbody tr.row--duplicate td { background: var(--dup-soft); }
+.rows tbody tr.row--duplicate:hover td { background: var(--dup-soft); }
 
 /* ------------------------------------------------------------- combobox - */
 .cbx {
@@ -451,7 +526,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .rows tbody tr:hover { background: var(--bg-subtle); }
 
 .col-order { width: 68px; }
-.col-controls { width: 132px; }
+.col-controls { width: 168px; }
 
 .order-badge {
   display: inline-grid;
@@ -683,6 +758,9 @@ button, input, textarea { font: inherit; color: inherit; }
     --warn-strong:   #e8b45c;
     --warn-soft:     #2e2618;
     --warn-ring:     rgba(232, 180, 92, .28);
+    --dup:           #a58ce0;
+    --dup-soft:      #241e35;
+    --dup-ring:      rgba(165, 140, 224, .28);
     --text-invert:   #0d1117;
   }
   .btn--primary { color: #0d1117; }

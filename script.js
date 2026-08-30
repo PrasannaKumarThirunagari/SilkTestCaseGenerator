@@ -20,6 +20,7 @@
   function cloneState(src) {
     return {
       testContext: {
+        testCaseName: src.testContext.testCaseName || '',
         targetApplication: src.testContext.targetApplication || '',
         referenceFile: src.testContext.referenceFile || '',
         userStory: src.testContext.userStory || ''
@@ -69,6 +70,46 @@
   }
 
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  /* ======================================================================
+     2b. TEST CASE NAME
+     A name the user types wins. Otherwise a name is built from the target
+     application and the time it was generated: Microsoft_Outlook_Desktop_
+     20260830_143022. The generated name is held steady rather than being
+     recomputed on every keystroke, so the prompt and its character count do
+     not churn while typing. It is refreshed on load, on reset, when a sample
+     is loaded, and when the target application changes.
+     ====================================================================== */
+
+  var autoTestCaseName = '';
+
+  function nameTimestamp(d) {
+    return '' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) +
+      '_' + pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds());
+  }
+
+  /* 'Microsoft Outlook (Desktop)' -> 'Microsoft_Outlook_Desktop' */
+  function nameFromApplication(application) {
+    return trim(application)
+      .replace(/[^A-Za-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  function buildAutoTestCaseName() {
+    var base = nameFromApplication(state.testContext.targetApplication) || 'SilkTestCase';
+    return base + '_' + nameTimestamp(new Date());
+  }
+
+  function refreshAutoTestCaseName() {
+    autoTestCaseName = buildAutoTestCaseName();
+    var input = $('test-case-name');
+    if (input) input.placeholder = autoTestCaseName;
+  }
+
+  /* What the prompt actually uses. */
+  function effectiveTestCaseName() {
+    return trim(state.testContext.testCaseName) || autoTestCaseName;
+  }
 
   /* ======================================================================
      3. REUSABLE SEARCHABLE COMBOBOX
@@ -533,6 +574,12 @@
       down.setAttribute('aria-label', 'Move ' + cfg.label + ' step ' + (index + 1) + ' down');
       down.addEventListener('click', function () { cfg.onMove(index, 1); });
 
+      var dup = el('button', 'icon-btn', '⧉');
+      dup.type = 'button';
+      dup.setAttribute('aria-label', 'Duplicate ' + cfg.label + ' step ' + (index + 1));
+      dup.title = 'Duplicate this step';
+      dup.addEventListener('click', function () { cfg.onDuplicate(index); });
+
       var del = el('button', 'icon-btn icon-btn--danger', '✕');
       del.type = 'button';
       del.disabled = (rows.length <= 1);
@@ -541,12 +588,25 @@
 
       group.appendChild(up);
       group.appendChild(down);
+      group.appendChild(dup);
       group.appendChild(del);
       tdCtrls.appendChild(group);
       tr.appendChild(tdCtrls);
 
       tbody.appendChild(tr);
     });
+  }
+
+  /* Inserts a copy of row `index` directly below it. */
+  function duplicateInArray(arr, index) {
+    var source = arr[index];
+    if (!source) return false;
+    var copy = {};
+    for (var key in source) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) copy[key] = source[key];
+    }
+    arr.splice(index + 1, 0, copy);
+    return true;
   }
 
   function moveInArray(arr, index, delta) {
@@ -556,6 +616,88 @@
     arr[index] = arr[next];
     arr[next] = tmp;
     return true;
+  }
+
+  /* ======================================================================
+     4b. QUICK NAVIGATION
+     A searchable, non-persisted picker above the Navigation Steps table.
+     Selecting a flow appends its steps to BOTH the Navigation Steps table
+     and the SilkCentral Steps table, then resets itself — it is a trigger,
+     not a data field, so it never holds a sticky value of its own.
+     ====================================================================== */
+
+  var quickNavCombobox = null;
+
+  function currentQuickNavFlows() {
+    return D.quicknavForApplication(state.testContext.targetApplication);
+  }
+
+  function refreshQuickNavOptions() {
+    if (!quickNavCombobox) return;
+    quickNavCombobox.setOptions(currentQuickNavFlows().map(function (f) { return f.label; }));
+  }
+
+  function initializeQuickNav() {
+    var host = $('cbx-quick-nav');
+    quickNavCombobox = new Combobox(host, {
+      options: currentQuickNavFlows().map(function (f) { return f.label; }),
+      allowCustom: false,
+      label: 'Quick navigation',
+      placeholder: 'Search a common flow to insert…',
+      inputId: 'cbx-quick-nav-input',
+      onChange: handleQuickNavPick
+    });
+    host._combobox = quickNavCombobox;
+  }
+
+  function handleQuickNavPick(label) {
+    if (!hasText(label)) return;
+
+    var flow = D.quicknav.filter(function (f) { return f.label === label; })[0];
+    // Reset the picker immediately either way — it never keeps a value.
+    quickNavCombobox.setValue('', false);
+    if (!flow) return;
+
+    insertQuickNavFlow(flow);
+  }
+
+  function insertQuickNavFlow(flow) {
+    // If Target application is still empty, adopt the flow's own application
+    // so the newly inserted targets are never flagged as mismatched.
+    if (flow.application && !hasText(state.testContext.targetApplication)) {
+      state.testContext.targetApplication = flow.application;
+      topCombos.targetApplication.setValue(flow.application, false);
+      refreshAutoTestCaseName();
+    }
+
+    // A single still-blank leading row is a placeholder, not real content —
+    // drop it rather than leaving an empty row ahead of the inserted flow.
+    if (state.navigationSteps.length === 1 &&
+        !hasText(state.navigationSteps[0].action) && !hasText(state.navigationSteps[0].target)) {
+      state.navigationSteps.length = 0;
+    }
+    if (state.silkCentralSteps.length === 1 &&
+        !hasText(state.silkCentralSteps[0].command) && !hasText(state.silkCentralSteps[0].name)) {
+      state.silkCentralSteps.length = 0;
+    }
+
+    var insertedAt = state.navigationSteps.length;
+
+    flow.steps.forEach(function (step) {
+      state.navigationSteps.push({ action: step.action, target: step.target });
+      state.silkCentralSteps.push({ command: step.command, name: step.name });
+    });
+
+    refreshNavigationTargets();          // application may have just changed
+    renderNavigationSteps();
+    renderSilkCentralSteps();
+    updateNavigationPath();
+    updateCommandValues();
+    refreshQuickNavOptions();
+    updateGeneratedPrompt();
+
+    showToast('Inserted: ' + flow.label);
+    focusRowField($('nav-body'), insertedAt);
   }
 
   /* ======================================================================
@@ -605,14 +747,97 @@
       ],
       onChange: function () { updateNavigationPath(); updateGeneratedPrompt(); },
       onMove: function (i, d) { moveNavigationStep(i, d); },
+      onDuplicate: function (i) { duplicateNavigationStep(i); },
       onRemove: function (i) { removeNavigationStep(i); }
     };
   }
 
   function renderNavigationSteps() {
     renderRows(navConfig());
-    $('nav-count').textContent =
-      state.navigationSteps.length + (state.navigationSteps.length === 1 ? ' step' : ' steps');
+    refreshNavigationDecorations();
+  }
+
+  /* ======================================================================
+     4c. NAVIGATION STEP DECORATIONS — search filter + duplicate highlight
+     Both are view-only: they never touch state.navigationSteps, only how the
+     already-rendered rows are displayed. Runs after every render, so it
+     stays correct across add / remove / move / duplicate / quick-nav insert
+     without each of those call sites needing to know about it.
+     ====================================================================== */
+
+  var navSearchQuery = '';
+  var highlightDuplicatesOn = false;
+
+  /**
+   * Row-key for duplicate detection: trimmed, case-insensitive Action+Target.
+   * Rows missing either field are excluded — an incomplete row is not yet a
+   * meaningful duplicate of anything.
+   */
+  function navRowKey(step) {
+    var a = trim(step.action).toLowerCase();
+    var t = trim(step.target).toLowerCase();
+    if (!a || !t) return '';
+    return a + ' / ' + t;
+  }
+
+  function refreshNavigationDecorations() {
+    var rows = $('nav-body').querySelectorAll('tr');
+    var query = navSearchQuery.trim().toLowerCase();
+    var visibleCount = 0;
+
+    var duplicateCounts = {};
+    if (highlightDuplicatesOn) {
+      state.navigationSteps.forEach(function (step) {
+        var key = navRowKey(step);
+        if (key) duplicateCounts[key] = (duplicateCounts[key] || 0) + 1;
+      });
+    }
+
+    rows.forEach(function (tr, i) {
+      var step = state.navigationSteps[i];
+      if (!step) return;
+
+      var a = trim(step.action);
+      var t = trim(step.target);
+      var matchesSearch = !query ||
+        a.toLowerCase().indexOf(query) !== -1 ||
+        t.toLowerCase().indexOf(query) !== -1;
+
+      tr.hidden = !matchesSearch;
+      if (matchesSearch) visibleCount++;
+
+      var key = navRowKey(step);
+      var isDuplicate = highlightDuplicatesOn && key && duplicateCounts[key] > 1;
+      tr.classList.toggle('row--duplicate', isDuplicate);
+      if (isDuplicate) {
+        tr.title = 'Another step uses the same Action + Target.';
+      } else {
+        tr.removeAttribute('title');
+      }
+    });
+
+    var total = state.navigationSteps.length;
+    var unit = total === 1 ? ' step' : ' steps';
+    $('nav-count').textContent = query
+      ? (visibleCount + ' of ' + total + unit + ' shown')
+      : (total + unit);
+
+    var emptyMessage = $('nav-search-empty');
+    emptyMessage.hidden = !(query && visibleCount === 0);
+  }
+
+  function setNavigationSearch(query) {
+    navSearchQuery = query || '';
+    var clearBtn = $('btn-nav-search-clear');
+    if (clearBtn) clearBtn.hidden = !navSearchQuery;
+    refreshNavigationDecorations();
+  }
+
+  function toggleHighlightDuplicates() {
+    highlightDuplicatesOn = !highlightDuplicatesOn;
+    var btn = $('btn-toggle-duplicates');
+    if (btn) btn.setAttribute('aria-pressed', highlightDuplicatesOn ? 'true' : 'false');
+    refreshNavigationDecorations();
   }
 
   function addNavigationStep() {
@@ -639,6 +864,14 @@
     focusRowControl($('nav-body'), index + delta, delta > 0 ? 1 : 0);
   }
 
+  function duplicateNavigationStep(index) {
+    if (!duplicateInArray(state.navigationSteps, index)) return;
+    renderNavigationSteps();
+    updateNavigationPath();
+    updateGeneratedPrompt();
+    focusRowField($('nav-body'), index + 1);
+  }
+
   function moveNavigationStepUp(index) { moveNavigationStep(index, -1); }
   function moveNavigationStepDown(index) { moveNavigationStep(index, 1); }
 
@@ -657,6 +890,7 @@
       ],
       onChange: function () { updateCommandValues(); updateGeneratedPrompt(); },
       onMove: function (i, d) { moveSilkCentralStep(i, d); },
+      onDuplicate: function (i) { duplicateSilkCentralStep(i); },
       onRemove: function (i) { removeSilkCentralStep(i); }
     };
   }
@@ -719,6 +953,14 @@
     container.appendChild(el('code', 'path__code', value));
   }
 
+  function duplicateSilkCentralStep(index) {
+    if (!duplicateInArray(state.silkCentralSteps, index)) return;
+    renderSilkCentralSteps();
+    updateCommandValues();
+    updateGeneratedPrompt();
+    focusRowField($('silk-body'), index + 1);
+  }
+
   function moveSilkCentralStepUp(index) { moveSilkCentralStep(index, -1); }
   function moveSilkCentralStepDown(index) { moveSilkCentralStep(index, 1); }
 
@@ -728,6 +970,13 @@
     var rows = tbody.querySelectorAll('tr');
     if (!rows.length) return;
     var input = rows[rows.length - 1].querySelector('.cbx__input');
+    if (input) input.focus();
+  }
+
+  function focusRowField(tbody, rowIndex) {
+    var rows = tbody.querySelectorAll('tr');
+    if (!rows[rowIndex]) return;
+    var input = rows[rowIndex].querySelector('.cbx__input');
     if (input) input.focus();
   }
 
@@ -800,7 +1049,10 @@
   function hasAnyInput() {
     var tc = state.testContext;
     var v = state.verification;
-    return hasText(tc.targetApplication) || hasText(tc.referenceFile) || hasText(tc.userStory) ||
+    /* The generated fallback name is not user input, so it alone must not
+       make the prompt appear. Only a typed name counts. */
+    return hasText(tc.testCaseName) ||
+      hasText(tc.targetApplication) || hasText(tc.referenceFile) || hasText(tc.userStory) ||
       filledNavSteps().length > 0 || filledSilkSteps().length > 0 ||
       hasText(v.operation) || hasText(v.controlAccess) || hasText(v.controlType) ||
       hasText(v.expectedValue) || hasText(v.acceptanceCriteria);
@@ -850,6 +1102,7 @@
 
     /* --- Test Context --------------------------------------------------- */
     var ctx = [];
+    ctx.push(L.testCaseName + ': ' + effectiveTestCaseName());
     if (hasText(tc.targetApplication)) ctx.push(L.targetApplication + ': ' + trim(tc.targetApplication));
     if (hasText(tc.referenceFile)) ctx.push(L.referenceFile + ': ' + trim(tc.referenceFile));
     if (hasText(tc.userStory)) {
@@ -1070,6 +1323,14 @@
     state = cloneState(next);
     if (!state.navigationSteps.length) state.navigationSteps = [{ action: '', target: '' }];
     if (!state.silkCentralSteps.length) state.silkCentralSteps = [{ command: '', name: '' }];
+    // A stale search over content that no longer exists is confusing —
+    // clear it. The duplicate-highlight toggle is a display preference, not
+    // tied to any one test case, so it deliberately survives resets/samples.
+    var searchInput = $('nav-search');
+    if (searchInput) searchInput.value = '';
+    var searchClear = $('btn-nav-search-clear');
+    if (searchClear) searchClear.hidden = true;
+    navSearchQuery = '';
     updateUI();
   }
 
@@ -1113,12 +1374,16 @@
   var topCombos = {};
 
   function initializeComboboxes() {
+    initializeQuickNav();
+
     topCombos.targetApplication = createCombobox($('cbx-target-application'), 'targetApplication', {
       inputId: 'cbx-target-application-input',
       value: state.testContext.targetApplication,
       onChange: function (v) {
         state.testContext.targetApplication = v;
         refreshNavigationTargets();
+        refreshAutoTestCaseName();
+        refreshQuickNavOptions();
         updateGeneratedPrompt();
       }
     });
@@ -1162,6 +1427,7 @@
     topCombos.controlType.setValue(state.verification.controlType, false);
     topCombos.expectedValue.setValue(state.verification.expectedValue, false);
 
+    $('test-case-name').value = state.testContext.testCaseName;
     $('user-story').value = state.testContext.userStory;
     $('acceptance').value = state.verification.acceptanceCriteria;
   }
@@ -1171,15 +1437,22 @@
      ====================================================================== */
 
   function updateUI() {
+    refreshAutoTestCaseName();
     syncTopControls();
     renderNavigationSteps();
     renderSilkCentralSteps();
     updateNavigationPath();
     updateCommandValues();
+    refreshQuickNavOptions();
     updateGeneratedPrompt();
   }
 
   function bindEvents() {
+    $('test-case-name').addEventListener('input', function () {
+      state.testContext.testCaseName = this.value;
+      updateGeneratedPrompt();
+    });
+
     $('user-story').addEventListener('input', function () {
       state.testContext.userStory = this.value;
       updateGeneratedPrompt();
@@ -1189,6 +1462,16 @@
       state.verification.acceptanceCriteria = this.value;
       updateGeneratedPrompt();
     });
+
+    $('nav-search').addEventListener('input', function () {
+      setNavigationSearch(this.value);
+    });
+    $('btn-nav-search-clear').addEventListener('click', function () {
+      $('nav-search').value = '';
+      setNavigationSearch('');
+      $('nav-search').focus();
+    });
+    $('btn-toggle-duplicates').addEventListener('click', toggleHighlightDuplicates);
 
     $('btn-add-nav').addEventListener('click', addNavigationStep);
     $('btn-add-silk').addEventListener('click', addSilkCentralStep);
@@ -1201,7 +1484,15 @@
     $('btn-download').addEventListener('click', downloadPrompt);
   }
 
+  var initialized = false;
+
   function initializeApp() {
+    /* Guard against a second init (duplicate script tag, a late
+       DOMContentLoaded, a manual call). Re-running would discard everything
+       entered and orphan the dropdowns already attached to <body>. */
+    if (initialized) return;
+    initialized = true;
+
     if (!D) {
       // Nothing sensible can be rendered without the data layer.
       document.body.innerHTML =
@@ -1233,6 +1524,14 @@
     updateCommandValues: updateCommandValues,
     commandValueString: commandValueString,
     addNavigationStep: addNavigationStep,
+    duplicateNavigationStep: duplicateNavigationStep,
+    duplicateSilkCentralStep: duplicateSilkCentralStep,
+    insertQuickNavFlow: insertQuickNavFlow,
+    handleQuickNavPick: handleQuickNavPick,
+    effectiveTestCaseName: effectiveTestCaseName,
+    setNavigationSearch: setNavigationSearch,
+    toggleHighlightDuplicates: toggleHighlightDuplicates,
+    isHighlightDuplicatesOn: function () { return highlightDuplicatesOn; },
     removeNavigationStep: removeNavigationStep,
     moveNavigationStepUp: moveNavigationStepUp,
     moveNavigationStepDown: moveNavigationStepDown,

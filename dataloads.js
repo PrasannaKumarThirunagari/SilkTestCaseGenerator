@@ -95,10 +95,12 @@
     'Teams sidebar',
     'Chat list',
     'Chat window',
+    'New chat button',
     'Message compose box',
     'Teams channel',
     'Files tab',
-    'Meetings tab'
+    'Meetings tab',
+    'Join button'
   ];
 
   var GENERIC_TARGETS = [
@@ -209,7 +211,13 @@
     'ValidateMessageDelivered',
     'CaptureEvidenceScreenshot',
     'LogVerificationResult',
-    'CloseApplicationUnderTest'
+    'CloseApplicationUnderTest',
+    'StartNewChat',
+    'EnterRecipientName',
+    'SelectRecipientFromResults',
+    'OpenMeetingsTab',
+    'ClickReplyButton',
+    'EnterReplyText'
   ];
 
   var VERIFICATION_OPERATIONS = [
@@ -408,6 +416,7 @@
       id: bp.id,
       label: bp.label,
       testContext: {
+        testCaseName: bp.testCaseName || '',
         targetApplication: application,
         referenceFile: resolve(REFERENCE_FILES, bp.referenceFile, 'REFERENCE_FILES', notes, 'Reference filename'),
         userStory: bp.userStory
@@ -454,6 +463,7 @@
   var OUTLOOK_BLUEPRINT = {
     id: 'outlook',
     label: 'Outlook Sample',
+    testCaseName: 'Outlook_OpenInboxAttachment',
     application: 'Microsoft Outlook (Desktop)',
     referenceFile: 'Outlook.t',
     userStory:
@@ -492,6 +502,7 @@
   var TEAMS_BLUEPRINT = {
     id: 'teams',
     label: 'Teams Sample',
+    testCaseName: 'Teams_SendChatMessage',
     application: 'Microsoft Teams (Desktop)',
     referenceFile: 'Teams.t',
     userStory:
@@ -531,12 +542,75 @@
   var OUTLOOK_SAMPLE = buildSample(OUTLOOK_BLUEPRINT);
   var TEAMS_SAMPLE = buildSample(TEAMS_BLUEPRINT);
 
+  /* ======================================================================
+     QUICK NAVIGATION FLOWS
+
+     Raw content lives in quicknav.js (window.QUICKNAV_BLUEPRINTS), loaded
+     before this file. Each flow is resolved here the same way the samples
+     are: every action / target / command / name is matched against the real
+     option lists, so a rename or deletion in the lists above is absorbed
+     instead of breaking the flow. Navigation targets are resolved against
+     the flow's own application, not whatever is currently selected in the
+     form.
+     ====================================================================== */
+
+  function buildQuickNavFlow(bp) {
+    var notes = [];
+    var application = bp.application
+      ? resolve(APPLICATIONS, bp.application, 'APPLICATIONS', notes, bp.label + ': application')
+      : '';
+    var appTargets = application ? targetsForApplication(application) : TARGETS;
+    var targetListName = application ? ('the ' + application + ' target list') : 'TARGETS';
+
+    var steps = (bp.steps || []).map(function (step, i) {
+      var where = bp.label + ': step ' + (i + 1);
+      return {
+        action: resolve(ACTIONS, step[0], 'ACTIONS', notes, where + ' action'),
+        target: resolve(appTargets, step[1], targetListName, notes, where + ' target'),
+        command: resolve(SILK_COMMANDS, step[2], 'SILK_COMMANDS', notes, where + ' command'),
+        name: resolve(SILK_NAMES, step[3], 'SILK_NAMES', notes, where + ' name')
+      };
+    });
+
+    var flow = {
+      id: bp.id,
+      label: bp.label,
+      application: application,
+      steps: steps,
+      adaptations: notes
+    };
+
+    if (notes.length && global.console && global.console.warn) {
+      global.console.warn(
+        '[dataloads] Quick-nav flow "' + bp.label + '" was adapted to the current lists:\n  ' +
+        notes.join('\n  ')
+      );
+    }
+
+    return flow;
+  }
+
+  var QUICKNAV = (global.QUICKNAV_BLUEPRINTS || []).map(buildQuickNavFlow);
+
+  /**
+   * Flows relevant to the given Target application, for the Quick navigation
+   * picker. Falls back to every flow when no application is selected, the
+   * application is unrecognised, or no flow declares that exact application —
+   * so the picker is never left empty.
+   */
+  function quicknavForApplication(application) {
+    var app = (application === undefined || application === null) ? '' : String(application).trim();
+    if (!app) return QUICKNAV;
+    var matches = QUICKNAV.filter(function (f) { return f.application === app; });
+    return matches.length ? matches : QUICKNAV;
+  }
+
   /* ---------------------------------------------------------------------- */
   /* Defaults used by reset / initial render                                 */
   /* ---------------------------------------------------------------------- */
 
   var EMPTY_STATE = {
-    testContext: { targetApplication: '', referenceFile: '', userStory: '' },
+    testContext: { testCaseName: '', targetApplication: '', referenceFile: '', userStory: '' },
     navigationSteps: [{ action: '', target: '' }],
     silkCentralSteps: [{ command: '', name: '' }],
     verification: {
@@ -627,6 +701,7 @@
     silkCentralSteps: 'SILKCENTRAL STEPS',
     verificationEvidence: 'VERIFICATION EVIDENCE',
     labels: {
+      testCaseName: 'Test case name',
       targetApplication: 'Target application',
       referenceFile: 'Reference filename',
       userStory: 'User story description',
@@ -659,6 +734,8 @@
     fields: FIELDS,
     emptyState: EMPTY_STATE,
     promptHeadings: PROMPT_HEADINGS,
+    quicknav: QUICKNAV,
+    quicknavForApplication: quicknavForApplication,
     samples: {
       outlook: OUTLOOK_SAMPLE,
       teams: TEAMS_SAMPLE
