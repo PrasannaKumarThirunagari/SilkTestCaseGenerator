@@ -114,6 +114,13 @@
     this.input.setAttribute('aria-controls', this.listId);
     if (this.labelText && !inputId) this.input.setAttribute('aria-label', this.labelText);
 
+    this.warnEl = el('span', 'cbx__warn', '⚠');
+    this.warnEl.setAttribute('aria-hidden', 'true');
+    this.warnEl.hidden = true;
+
+    this.warnTextEl = el('span', 'sr-only');
+    this.warnTextEl.id = this.uid + '-warn';
+
     this.clearBtn = el('button', 'cbx__btn cbx__clear', '×');
     this.clearBtn.type = 'button';
     this.clearBtn.setAttribute('aria-label', 'Clear ' + (this.labelText || 'value'));
@@ -125,6 +132,8 @@
     this.toggleBtn.setAttribute('aria-label', 'Show options for ' + (this.labelText || 'this field'));
 
     this.host.appendChild(this.input);
+    this.host.appendChild(this.warnEl);
+    this.host.appendChild(this.warnTextEl);
     this.host.appendChild(this.clearBtn);
     this.host.appendChild(this.toggleBtn);
 
@@ -393,6 +402,35 @@
     if (fire) this.onChange(this.value);
   };
 
+  /* Swap the option list without rebuilding the widget, so the value, the
+     caret and the focus all survive. */
+  Combobox.prototype.setOptions = function (options) {
+    this.options = options || [];
+    if (this.isOpen) {
+      this.render(this.input.value);
+      this.position();
+    }
+  };
+
+  /* '' clears the warning. Anything else flags the field and exposes the
+     message to both pointer users (tooltip) and screen readers. */
+  Combobox.prototype.setWarning = function (message) {
+    var msg = message || '';
+    if (msg) {
+      this.host.classList.add('cbx--warn');
+      this.host.title = msg;
+      this.warnEl.hidden = false;
+      this.warnTextEl.textContent = msg;
+      this.input.setAttribute('aria-describedby', this.warnTextEl.id);
+    } else {
+      this.host.classList.remove('cbx--warn');
+      this.host.removeAttribute('title');
+      this.warnEl.hidden = true;
+      this.warnTextEl.textContent = '';
+      this.input.removeAttribute('aria-describedby');
+    }
+  };
+
   Combobox.prototype.destroy = function () {
     this.close();
     document.removeEventListener('mousedown', this._bound.outside, true);
@@ -407,7 +445,7 @@
   function createCombobox(host, fieldKey, config) {
     var meta = D.fields[fieldKey] || {};
     var cfg = {
-      options: meta.options || [],
+      options: (config && config.options) || meta.options || [],
       allowCustom: meta.allowCustom !== false,
       placeholder: meta.placeholder || '',
       label: meta.label || '',
@@ -461,18 +499,23 @@
         tr.appendChild(td);
 
         createCombobox(hostDiv, col.fieldKey, {
+          options: col.optionsFor ? col.optionsFor() : null,
           value: row[col.key] || '',
-          onChange: (function (i, key) {
+          onChange: (function (i, key, column, host) {
             return function (val) {
               cfg.getRows()[i][key] = val;
+              if (column.warningFor) host._combobox.setWarning(column.warningFor(val));
               cfg.onChange();
             };
-          })(index, col.key)
+          })(index, col.key, col, hostDiv)
         });
         hostDiv._combobox.input.setAttribute(
           'aria-label',
           (D.fields[col.fieldKey].label || col.key) + ', ' + cfg.label + ' step ' + (index + 1)
         );
+        if (col.warningFor) {
+          hostDiv._combobox.setWarning(col.warningFor(row[col.key] || ''));
+        }
       });
 
       var tdCtrls = el('td', 'col-controls');
@@ -519,6 +562,33 @@
      5. NAVIGATION STEPS
      ====================================================================== */
 
+  /* Target options follow the selected Target application. An empty, unknown
+     or custom application falls back to every target. */
+  function currentTargetOptions() {
+    return D.targetsForApplication(state.testContext.targetApplication);
+  }
+
+  function targetWarning(value) {
+    return D.targetMismatch(state.testContext.targetApplication, value);
+  }
+
+  /**
+   * Re-points every Target cell at the option list for the current
+   * application and re-evaluates its warning. Entered values are never
+   * touched — a target belonging to another application simply gets flagged.
+   */
+  function refreshNavigationTargets() {
+    var options = currentTargetOptions();
+    var rows = $('nav-body').querySelectorAll('tr');
+    for (var i = 0; i < rows.length; i++) {
+      var hosts = rows[i].querySelectorAll('[data-cbx]');
+      var host = hosts[1];                       // column 2 is Target
+      if (!host || !host._combobox) continue;
+      host._combobox.setOptions(options);
+      host._combobox.setWarning(targetWarning(host._combobox.value));
+    }
+  }
+
   function navConfig() {
     return {
       tbody: $('nav-body'),
@@ -526,7 +596,12 @@
       getRows: function () { return state.navigationSteps; },
       columns: [
         { key: 'action', fieldKey: 'action' },
-        { key: 'target', fieldKey: 'target' }
+        {
+          key: 'target',
+          fieldKey: 'target',
+          optionsFor: currentTargetOptions,
+          warningFor: targetWarning
+        }
       ],
       onChange: function () { updateNavigationPath(); updateGeneratedPrompt(); },
       onMove: function (i, d) { moveNavigationStep(i, d); },
@@ -1003,7 +1078,11 @@
     topCombos.targetApplication = createCombobox($('cbx-target-application'), 'targetApplication', {
       inputId: 'cbx-target-application-input',
       value: state.testContext.targetApplication,
-      onChange: function (v) { state.testContext.targetApplication = v; updateGeneratedPrompt(); }
+      onChange: function (v) {
+        state.testContext.targetApplication = v;
+        refreshNavigationTargets();
+        updateGeneratedPrompt();
+      }
     });
 
     topCombos.referenceFile = createCombobox($('cbx-reference-file'), 'referenceFile', {

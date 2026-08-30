@@ -23,8 +23,8 @@
   ];
 
   var REFERENCE_FILES = [
-    'Outlook_Mail_Verification.t',
-    'Teams_Chat_Verification.t',
+    'Outlook.t',
+    'Teams.t',
   ];
 
   var ACTIONS = [
@@ -58,12 +58,27 @@
     'Delete'
   ];
 
-  var TARGETS = [
+  /* --- Navigation targets -------------------------------------------------
+     Targets are split by application so the Navigation Steps "Target" column
+     only offers what the selected Target application actually has.
+
+     SHELL   : app-agnostic entry points, offered first for every application.
+     OUTLOOK : mail / calendar targets.
+     TEAMS   : chat / channel targets.
+     GENERIC : app-agnostic UI furniture, offered last for every application.
+
+     Desktop and Web variants of an application share one list.
+     ---------------------------------------------------------------------- */
+
+  var SHELL_TARGETS = [
     'Application shortcut',
     'Login page',
     'Home page',
     'Main window',
-    'Navigation pane',
+    'Navigation pane'
+  ];
+
+  var OUTLOOK_TARGETS = [
     'Ribbon toolbar',
     'Inbox folder',
     'Sent Items folder',
@@ -73,14 +88,20 @@
     'New Mail window',
     'Calendar view',
     'Meeting invite',
-    'Contacts list',
+    'Contacts list'
+  ];
+
+  var TEAMS_TARGETS = [
     'Teams sidebar',
     'Chat list',
     'Chat window',
     'Message compose box',
     'Teams channel',
     'Files tab',
-    'Meetings tab',
+    'Meetings tab'
+  ];
+
+  var GENERIC_TARGETS = [
     'Search box',
     'Settings dialog',
     'Confirmation dialog',
@@ -89,8 +110,54 @@
     'Status bar'
   ];
 
+  function targetSet(appSpecific) {
+    return SHELL_TARGETS.concat(appSpecific, GENERIC_TARGETS);
+  }
+
+  /* Every target that exists anywhere. Used as the fallback list when no
+     application is selected, and to tell a recognised-but-wrong-app target
+     apart from a value the user typed themselves. */
+  var TARGETS = SHELL_TARGETS
+    .concat(OUTLOOK_TARGETS, TEAMS_TARGETS, GENERIC_TARGETS);
+
+  /* Keys must match the entries in APPLICATIONS exactly. */
+  var TARGETS_BY_APPLICATION = {
+    'Microsoft Outlook (Desktop)': targetSet(OUTLOOK_TARGETS),
+    'Microsoft Outlook (Web)': targetSet(OUTLOOK_TARGETS),
+    'Microsoft Teams (Desktop)': targetSet(TEAMS_TARGETS),
+    'Microsoft Teams (Web)': targetSet(TEAMS_TARGETS)
+  };
+
+  /**
+   * Target options for the given application.
+   * An empty, unknown or custom-typed application falls back to every target,
+   * so nothing is ever unreachable.
+   */
+  function targetsForApplication(application) {
+    var key = (application === undefined || application === null) ? '' : String(application).trim();
+    return TARGETS_BY_APPLICATION[key] || TARGETS;
+  }
+
+  /**
+   * Returns a warning message when value is a target belonging to a different
+   * application, or '' when there is nothing to flag.
+   * A value the user typed themselves is never flagged — only recognised
+   * targets that belong to another application are.
+   */
+  function targetMismatch(application, value) {
+    var app = (application === undefined || application === null) ? '' : String(application).trim();
+    var val = (value === undefined || value === null) ? '' : String(value).trim();
+
+    if (!app || !val) return '';
+    if (!TARGETS_BY_APPLICATION[app]) return '';       // custom / unknown application
+    if (TARGETS.indexOf(val) === -1) return '';        // value the user typed themselves
+    if (TARGETS_BY_APPLICATION[app].indexOf(val) !== -1) return '';
+
+    return '"' + val + '" is not a ' + app + ' target.';
+  }
+
   var SILK_COMMANDS = [
-    'OpenApplication',
+    '{OpenApplication}',
     'CloseApplication',
     'AttachToApplication',
     'SetWindow',
@@ -229,71 +296,191 @@
     'Non-empty text'
   ];
 
-  /* ---------------------------------------------------------------------- */
-  /* Sample payloads                                                         */
-  /*                                                                        */
-  /* Every sample value below is taken from the option lists above through  */
-  /* pick(), so a sample can never contain a value that is missing from the */
-  /* dropdowns. If a list is edited and a sample value disappears, pick()   */
-  /* reports it in the console instead of failing silently.                 */
-  /* ---------------------------------------------------------------------- */
+  /* ======================================================================
+     SAMPLE PAYLOADS
 
-  function pick(list, listName, value) {
-    if (list.indexOf(value) === -1 && global.console && global.console.warn) {
+     The samples are NOT stored as fixed values. Each one is a blueprint that
+     names what it wants, and buildSample() resolves every name against the
+     option lists above at load time. The value a sample loads therefore
+     always comes from the current lists — edit a list and the samples follow.
+
+     Each blueprint entry is either a single name, or several names in order
+     of preference. resolve() tries, in order:
+
+       1. an exact match (case-insensitive)
+       2. a partial match either way, so 'Inbox folder' still finds a renamed
+          'Inbox', and 'Inbox' still finds 'Inbox folder'
+       3. the entry sharing the most words, so 'CaptureScreenshot' still finds
+          a renamed 'TakeScreenshot' and 'Email attachment' finds
+          'Mail attachment' (camelCase is split into words too)
+       4. the first entry in the list, reported in the console
+
+     A sample can never load a value that is absent from its dropdown.
+     ====================================================================== */
+
+  /* 'CaptureScreenshot' -> ['capture','screenshot'];
+     'Outlook_Mail_Verification.t' -> ['outlook','mail','verification'].
+     Words of 1-2 characters carry no meaning here and are dropped. */
+  function tokenize(text) {
+    return String(text)
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(function (word) { return word.length > 2; });
+  }
+
+  function sharedWordCount(aTokens, bTokens) {
+    var shared = 0;
+    for (var i = 0; i < aTokens.length; i++) {
+      if (bTokens.indexOf(aTokens[i]) !== -1) shared++;
+    }
+    return shared;
+  }
+
+  function resolve(list, candidates, listName, notes, fieldLabel) {
+    if (!list || !list.length) {
+      notes.push(fieldLabel + ': ' + listName + ' is empty — left blank.');
+      return '';
+    }
+
+    var wanted = (typeof candidates === 'string') ? [candidates] : (candidates || []);
+    var i, j, want, entry;
+
+    /* 1. exact match */
+    for (i = 0; i < wanted.length; i++) {
+      want = String(wanted[i]).toLowerCase();
+      for (j = 0; j < list.length; j++) {
+        if (String(list[j]).toLowerCase() === want) return list[j];
+      }
+    }
+
+    /* 2. partial match in either direction (survives renames) */
+    for (i = 0; i < wanted.length; i++) {
+      want = String(wanted[i]).toLowerCase();
+      if (!want) continue;
+      for (j = 0; j < list.length; j++) {
+        entry = String(list[j]).toLowerCase();
+        if (!entry) continue;
+        if (entry.indexOf(want) !== -1 || want.indexOf(entry) !== -1) {
+          notes.push(fieldLabel + ': "' + wanted[0] + '" → "' + list[j] + '"');
+          return list[j];
+        }
+      }
+    }
+
+    /* 3. the entry sharing the most words */
+    var entryTokens = list.map(tokenize);
+    for (i = 0; i < wanted.length; i++) {
+      var wantTokens = tokenize(wanted[i]);
+      if (!wantTokens.length) continue;
+
+      var bestIndex = -1;
+      var bestScore = 0;
+      for (j = 0; j < list.length; j++) {
+        var score = sharedWordCount(wantTokens, entryTokens[j]);
+        if (score > bestScore) { bestScore = score; bestIndex = j; }
+      }
+      if (bestIndex !== -1) {
+        notes.push(fieldLabel + ': "' + wanted[0] + '" → "' + list[bestIndex] + '"');
+        return list[bestIndex];
+      }
+    }
+
+    /* 4. nothing recognisable left — fall back to the first entry */
+    notes.push(
+      fieldLabel + ': "' + wanted[0] + '" is no longer in ' + listName +
+      ' — used "' + list[0] + '"'
+    );
+    return list[0];
+  }
+
+  function buildSample(bp) {
+    var notes = [];
+
+    var application = resolve(APPLICATIONS, bp.application, 'APPLICATIONS', notes, 'Target application');
+
+    /* Navigation targets are resolved against this application's own target
+       list, so an Outlook sample can never pick up a Teams target. */
+    var appTargets = targetsForApplication(application);
+    var targetListName = 'the ' + (application || 'default') + ' target list';
+
+    var sample = {
+      id: bp.id,
+      label: bp.label,
+      testContext: {
+        targetApplication: application,
+        referenceFile: resolve(REFERENCE_FILES, bp.referenceFile, 'REFERENCE_FILES', notes, 'Reference filename'),
+        userStory: bp.userStory
+      },
+      navigationSteps: bp.navigation.map(function (step, i) {
+        var where = 'Navigation step ' + (i + 1);
+        return {
+          action: resolve(ACTIONS, step[0], 'ACTIONS', notes, where + ' action'),
+          target: resolve(appTargets, step[1], targetListName, notes, where + ' target')
+        };
+      }),
+      silkCentralSteps: bp.silkCentral.map(function (step, i) {
+        var where = 'SilkCentral step ' + (i + 1);
+        return {
+          command: resolve(SILK_COMMANDS, step[0], 'SILK_COMMANDS', notes, where + ' command'),
+          name: resolve(SILK_NAMES, step[1], 'SILK_NAMES', notes, where + ' name')
+        };
+      }),
+      verification: {
+        operation: resolve(VERIFICATION_OPERATIONS, bp.verification.operation, 'VERIFICATION_OPERATIONS', notes, 'Verification operation'),
+        controlAccess: resolve(CONTROL_ACCESS, bp.verification.controlAccess, 'CONTROL_ACCESS', notes, 'Control access'),
+        controlType: resolve(CONTROL_TYPES, bp.verification.controlType, 'CONTROL_TYPES', notes, 'Control type'),
+        expectedValue: resolve(EXPECTED_VALUES, bp.verification.expectedValue, 'EXPECTED_VALUES', notes, 'Expected value'),
+        acceptanceCriteria: bp.verification.acceptanceCriteria
+      }
+    };
+
+    /* Anything that had to be adapted is reported once, per sample. */
+    sample.adaptations = notes;
+    if (notes.length && global.console && global.console.warn) {
       global.console.warn(
-        '[dataloads] Sample value "' + value + '" is not present in ' + listName +
-        '. Add it to that list to keep the samples and the dropdowns in sync.'
+        '[dataloads] "' + bp.label + '" was adapted to the current lists:\n  ' + notes.join('\n  ')
       );
     }
-    return value;
+
+    return sample;
   }
 
-  function navStep(action, target) {
-    return {
-      action: pick(ACTIONS, 'ACTIONS', action),
-      target: pick(TARGETS, 'TARGETS', target)
-    };
-  }
+  /* --- Blueprints ---------------------------------------------------------
+     Free text (user story, acceptance criteria) belongs to the sample and is
+     used as written. Everything else names a list entry.
+     ---------------------------------------------------------------------- */
 
-  function silkStep(command, name) {
-    return {
-      command: pick(SILK_COMMANDS, 'SILK_COMMANDS', command),
-      name: pick(SILK_NAMES, 'SILK_NAMES', name)
-    };
-  }
-
-  var OUTLOOK_SAMPLE = {
+  var OUTLOOK_BLUEPRINT = {
     id: 'outlook',
     label: 'Outlook Sample',
-    testContext: {
-      targetApplication: pick(APPLICATIONS, 'APPLICATIONS', 'Microsoft Outlook (Desktop)'),
-      referenceFile: pick(REFERENCE_FILES, 'REFERENCE_FILES', 'Outlook_Mail_Verification.t'),
-      userStory:
-        'As an internal business user, I want to open the most recent email in my Outlook Inbox ' +
-        'and open its attachment, so that I can confirm the daily reconciliation report was ' +
-        'delivered with the correct file attached.'
-    },
-    navigationSteps: [
-      navStep('Launch application', 'Application shortcut'),
-      navStep('Login', 'Login page'),
-      navStep('Navigate to', 'Inbox folder'),
-      navStep('Select', 'Email message'),
-      navStep('Open', 'Email attachment')
+    application: 'Microsoft Outlook (Desktop)',
+    referenceFile: 'Outlook.t',
+    userStory:
+      'As an internal business user, I want to open the most recent email in my Outlook Inbox ' +
+      'and open its attachment, so that I can confirm the daily reconciliation report was ' +
+      'delivered with the correct file attached.',
+    navigation: [
+      ['Launch application', 'Application shortcut'],
+      ['Login', 'Login page'],
+      ['Navigate to', 'Inbox folder'],
+      ['Select', 'Email message'],
+      ['Open', 'Email attachment']
     ],
-    silkCentralSteps: [
-      silkStep('OpenApplication', 'LaunchApplicationUnderTest'),
-      silkStep('SetWindow', 'PerformLogin'),
-      silkStep('SelectItem', 'OpenInboxFolder'),
-      silkStep('ClickControl', 'SelectFirstEmail'),
-      silkStep('DoubleClickControl', 'OpenAttachment'),
-      silkStep('VerifyText', 'ValidateAttachmentName'),
-      silkStep('CaptureScreenshot', 'CaptureEvidenceScreenshot')
+    silkCentral: [
+      ['OpenApplication', 'LaunchApplicationUnderTest'],
+      ['SetWindow', 'PerformLogin'],
+      ['SelectItem', 'OpenInboxFolder'],
+      ['ClickControl', 'SelectFirstEmail'],
+      ['DoubleClickControl', 'OpenAttachment'],
+      ['VerifyText', 'ValidateAttachmentName'],
+      ['CaptureScreenshot', 'CaptureEvidenceScreenshot']
     ],
     verification: {
-      operation: pick(VERIFICATION_OPERATIONS, 'VERIFICATION_OPERATIONS', 'Verify text contains'),
-      controlAccess: pick(CONTROL_ACCESS, 'CONTROL_ACCESS', 'Accessibility name'),
-      controlType: pick(CONTROL_TYPES, 'CONTROL_TYPES', 'Label'),
-      expectedValue: pick(EXPECTED_VALUES, 'EXPECTED_VALUES', 'Attachment opened successfully'),
+      operation: 'Verify text contains',
+      controlAccess: 'Accessibility name',
+      controlType: 'Label',
+      expectedValue: 'Attachment opened successfully',
       acceptanceCriteria:
         'The most recent Inbox email opens without error.\n' +
         'The attachment name displayed in the reading pane matches the expected report name.\n' +
@@ -302,39 +489,37 @@
     }
   };
 
-  var TEAMS_SAMPLE = {
+  var TEAMS_BLUEPRINT = {
     id: 'teams',
     label: 'Teams Sample',
-    testContext: {
-      targetApplication: pick(APPLICATIONS, 'APPLICATIONS', 'Microsoft Teams (Desktop)'),
-      referenceFile: pick(REFERENCE_FILES, 'REFERENCE_FILES', 'Teams_Chat_Verification.t'),
-      userStory:
-        'As a project team member, I want to send a message in an existing Teams chat, ' +
-        'so that I can confirm the message is delivered and displayed in the conversation history.'
-    },
-    navigationSteps: [
-      navStep('Launch application', 'Application shortcut'),
-      navStep('Login', 'Login page'),
-      navStep('Navigate to', 'Teams sidebar'),
-      navStep('Select', 'Chat list'),
-      navStep('Open', 'Chat window'),
-      navStep('Type text into', 'Message compose box'),
-      navStep('Send', 'Chat window')
+    application: 'Microsoft Teams (Desktop)',
+    referenceFile: 'Teams.t',
+    userStory:
+      'As a project team member, I want to send a message in an existing Teams chat, ' +
+      'so that I can confirm the message is delivered and displayed in the conversation history.',
+    navigation: [
+      ['Launch application', 'Application shortcut'],
+      ['Login', 'Login page'],
+      ['Navigate to', 'Teams sidebar'],
+      ['Select', 'Chat list'],
+      ['Open', 'Chat window'],
+      ['Type text into', 'Message compose box'],
+      ['Send', 'Chat window']
     ],
-    silkCentralSteps: [
-      silkStep('OpenApplication', 'LaunchApplicationUnderTest'),
-      silkStep('SetWindow', 'PerformLogin'),
-      silkStep('ClickControl', 'OpenChatWindow'),
-      silkStep('SetText', 'SendChatMessage'),
-      silkStep('PressKey', 'SendChatMessage'),
-      silkStep('WaitForObject', 'ValidateMessageDelivered'),
-      silkStep('VerifyText', 'ValidateControlText')
+    silkCentral: [
+      ['OpenApplication', 'LaunchApplicationUnderTest'],
+      ['SetWindow', 'PerformLogin'],
+      ['ClickControl', 'OpenChatWindow'],
+      ['SetText', 'SendChatMessage'],
+      ['PressKey', 'SendChatMessage'],
+      ['WaitForObject', 'ValidateMessageDelivered'],
+      ['VerifyText', 'ValidateControlText']
     ],
     verification: {
-      operation: pick(VERIFICATION_OPERATIONS, 'VERIFICATION_OPERATIONS', 'Verify text equals'),
-      controlAccess: pick(CONTROL_ACCESS, 'CONTROL_ACCESS', 'Locator (XPath)'),
-      controlType: pick(CONTROL_TYPES, 'CONTROL_TYPES', 'ListItem'),
-      expectedValue: pick(EXPECTED_VALUES, 'EXPECTED_VALUES', 'Message sent successfully'),
+      operation: 'Verify text equals',
+      controlAccess: 'Locator (XPath)',
+      controlType: 'ListItem',
+      expectedValue: 'Message sent successfully',
       acceptanceCriteria:
         'The typed message appears as the last item in the chat conversation.\n' +
         'The message text matches exactly what was entered in the compose box.\n' +
@@ -342,6 +527,9 @@
         'The verification result is written to the test report.'
     }
   };
+
+  var OUTLOOK_SAMPLE = buildSample(OUTLOOK_BLUEPRINT);
+  var TEAMS_SAMPLE = buildSample(TEAMS_BLUEPRINT);
 
   /* ---------------------------------------------------------------------- */
   /* Defaults used by reset / initial render                                 */
@@ -458,6 +646,9 @@
     referenceFiles: REFERENCE_FILES,
     actions: ACTIONS,
     targets: TARGETS,
+    targetsByApplication: TARGETS_BY_APPLICATION,
+    targetsForApplication: targetsForApplication,
+    targetMismatch: targetMismatch,
     silkCommands: SILK_COMMANDS,
     silkNames: SILK_NAMES,
     verificationOperations: VERIFICATION_OPERATIONS,

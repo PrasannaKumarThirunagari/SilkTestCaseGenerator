@@ -32,6 +32,11 @@
   --danger-soft:   #fdeceb;
   --success:       #1d7a4c;
 
+  --warn:          #d9a441;
+  --warn-strong:   #a5711a;
+  --warn-soft:     #fdf6e7;
+  --warn-ring:     rgba(217, 164, 65, .30);
+
   --radius-sm: 5px;
   --radius:    8px;
   --radius-lg: 12px;
@@ -344,6 +349,26 @@ button, input, textarea { font: inherit; color: inherit; }
 .cbx__clear[hidden] { display: none; }
 .cbx.is-open .cbx__toggle { transform: rotate(180deg); }
 
+/* Value belongs to a different target application — flagged, never cleared */
+.cbx--warn { border-color: var(--warn); background: var(--warn-soft); }
+.cbx--warn:hover { border-color: var(--warn-strong); }
+.cbx--warn.is-focused {
+  border-color: var(--warn-strong);
+  box-shadow: 0 0 0 3px var(--warn-ring);
+}
+
+.cbx__warn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  color: var(--warn-strong);
+  font-size: 12px;
+  line-height: 1;
+  cursor: help;
+}
+.cbx__warn[hidden] { display: none; }
+
 /* dropdown is portalled to <body> so it can never be clipped */
 .cbx-list {
   position: fixed;
@@ -640,6 +665,10 @@ button, input, textarea { font: inherit; color: inherit; }
     --danger:        #ff8b80;
     --danger-soft:   #3a2320;
     --success:       #4cc38a;
+    --warn:          #b8862f;
+    --warn-strong:   #e8b45c;
+    --warn-soft:     #2e2618;
+    --warn-ring:     rgba(232, 180, 92, .28);
     --text-invert:   #0d1117;
   }
   .btn--primary { color: #0d1117; }
