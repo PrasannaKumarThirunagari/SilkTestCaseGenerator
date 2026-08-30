@@ -258,6 +258,7 @@ button, input, textarea { font: inherit; color: inherit; }
 /* ---------------------------------------------------------------- fields - */
 .grid { display: grid; gap: var(--sp-4); }
 .grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field--tight { gap: var(--sp-2); }
@@ -713,9 +714,14 @@ button, input, textarea { font: inherit; color: inherit; }
   .prompt { max-height: 620px; }
 }
 
+@media (max-width: 1320px) {
+  .grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 900px) {
   .layout { padding: var(--sp-4); }
   .grid--2 { grid-template-columns: minmax(0, 1fr); }
+  .grid--3 { grid-template-columns: minmax(0, 1fr); }
   .app-header__inner { padding: var(--sp-3) var(--sp-4); }
   .card__body { padding: var(--sp-4); }
   .card__head { padding: var(--sp-4); }

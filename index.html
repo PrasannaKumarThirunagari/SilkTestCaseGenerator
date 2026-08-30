@@ -48,16 +48,15 @@
         <p class="card__hint">What is being tested, and against which reference material.</p>
       </div>
       <div class="card__body">
-        <div class="field">
-          <label class="field__label" for="test-case-name">Test case name</label>
-          <input type="text" id="test-case-name" class="input" autocomplete="off" spellcheck="false"
-            aria-describedby="test-case-name-help">
-          <p class="field__help" id="test-case-name-help">
-            Leave blank and the name shown above is used, built from the target application and the current time.
-          </p>
-        </div>
-
-        <div class="grid grid--2">
+        <div class="grid grid--3">
+          <div class="field">
+            <label class="field__label" for="test-case-name">Test case name</label>
+            <input type="text" id="test-case-name" class="input" autocomplete="off" spellcheck="false"
+              aria-describedby="test-case-name-help">
+            <p class="field__help" id="test-case-name-help">
+              Blank uses the name shown above, built from the application and time.
+            </p>
+          </div>
           <div class="field">
             <label class="field__label" for="cbx-target-application-input">Target application</label>
             <div class="field__control" data-cbx id="cbx-target-application"></div>
@@ -89,7 +88,7 @@
         <div class="field">
           <label class="field__label" for="cbx-quick-nav-input">Quick navigation</label>
           <div class="field__control" data-cbx id="cbx-quick-nav"></div>
-          <p class="field__help">Pick a common flow to insert its steps into the tables below — fills the SilkCentral command value and name too.</p>
+          <p class="field__help">Pick a common flow to insert its steps into Navigation Steps below.</p>
         </div>
 
         <div class="toolbar">

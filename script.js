@@ -191,11 +191,16 @@
     });
 
     this.input.addEventListener('input', function () {
-      self.value = self.input.value;
-      self.clearBtn.hidden = !self.value;
+      // For a free-typed field (allowCustom), whatever is typed IS the
+      // value, live. For a picker (allowCustom:false, e.g. Quick navigation)
+      // this.value instead tracks the last actual SELECTION — set only by
+      // setValue(), never by typing — so commitOnBlur() has something real
+      // to revert to when what was typed doesn't match anything.
+      if (self.allowCustom) self.value = self.input.value;
+      self.clearBtn.hidden = !self.input.value;
       self.render(self.input.value);
       self.open();
-      self.onChange(self.value);
+      self.onChange(self.input.value);
     });
 
     this.input.addEventListener('mousedown', function () {
@@ -621,9 +626,10 @@
   /* ======================================================================
      4b. QUICK NAVIGATION
      A searchable, non-persisted picker above the Navigation Steps table.
-     Selecting a flow appends its steps to BOTH the Navigation Steps table
-     and the SilkCentral Steps table, then resets itself — it is a trigger,
-     not a data field, so it never holds a sticky value of its own.
+     Selecting a flow appends its steps to the Navigation Steps table only —
+     SilkCentral Steps is left entirely to the user — then resets itself; it
+     is a trigger, not a data field, so it never holds a sticky value of its
+     own.
      ====================================================================== */
 
   var quickNavCombobox = null;
@@ -653,11 +659,17 @@
   function handleQuickNavPick(label) {
     if (!hasText(label)) return;
 
+    // The combobox's onChange fires on every keystroke, not just on an
+    // actual selection — that is what lets the dropdown filter live as you
+    // type words. Only an EXACT label match means something was actually
+    // selected (click or Enter on a highlighted option); anything else is
+    // still-in-progress typing, so leave the field alone and keep filtering.
     var flow = D.quicknav.filter(function (f) { return f.label === label; })[0];
-    // Reset the picker immediately either way — it never keeps a value.
-    quickNavCombobox.setValue('', false);
     if (!flow) return;
 
+    // A real selection was made — clear the picker back to empty (it never
+    // keeps a sticky value) and insert the flow.
+    quickNavCombobox.setValue('', false);
     insertQuickNavFlow(flow);
   }
 
@@ -672,27 +684,22 @@
 
     // A single still-blank leading row is a placeholder, not real content —
     // drop it rather than leaving an empty row ahead of the inserted flow.
+    // Quick navigation only ever fills Navigation Steps; SilkCentral Steps is
+    // left entirely to the user.
     if (state.navigationSteps.length === 1 &&
         !hasText(state.navigationSteps[0].action) && !hasText(state.navigationSteps[0].target)) {
       state.navigationSteps.length = 0;
-    }
-    if (state.silkCentralSteps.length === 1 &&
-        !hasText(state.silkCentralSteps[0].command) && !hasText(state.silkCentralSteps[0].name)) {
-      state.silkCentralSteps.length = 0;
     }
 
     var insertedAt = state.navigationSteps.length;
 
     flow.steps.forEach(function (step) {
       state.navigationSteps.push({ action: step.action, target: step.target });
-      state.silkCentralSteps.push({ command: step.command, name: step.name });
     });
 
     refreshNavigationTargets();          // application may have just changed
     renderNavigationSteps();
-    renderSilkCentralSteps();
     updateNavigationPath();
-    updateCommandValues();
     refreshQuickNavOptions();
     updateGeneratedPrompt();
 
