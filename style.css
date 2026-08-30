@@ -527,6 +527,20 @@ button, input, textarea { font: inherit; color: inherit; }
 .path__arrow { color: var(--text-faint); font-size: 13px; }
 .path__empty { font-size: 12px; color: var(--text-faint); font-style: italic; }
 
+/* Single copyable string rather than pills */
+.path--code { display: block; }
+
+.path__code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12.25px;
+  line-height: 1.6;
+  color: var(--text);
+  word-break: break-all;
+  user-select: all;          /* one click selects the whole string */
+  cursor: text;
+}
+
 /* ----------------------------------------------------------- prompt panel */
 .panel {
   display: flex;

@@ -655,7 +655,7 @@
         { key: 'command', fieldKey: 'silkCommand' },
         { key: 'name', fieldKey: 'silkName' }
       ],
-      onChange: function () { updateGeneratedPrompt(); },
+      onChange: function () { updateCommandValues(); updateGeneratedPrompt(); },
       onMove: function (i, d) { moveSilkCentralStep(i, d); },
       onRemove: function (i) { removeSilkCentralStep(i); }
     };
@@ -670,6 +670,7 @@
   function addSilkCentralStep() {
     state.silkCentralSteps.push({ command: '', name: '' });
     renderSilkCentralSteps();
+    updateCommandValues();
     updateGeneratedPrompt();
     focusLastRow($('silk-body'));
   }
@@ -678,14 +679,44 @@
     if (state.silkCentralSteps.length <= 1) return;
     state.silkCentralSteps.splice(index, 1);
     renderSilkCentralSteps();
+    updateCommandValues();
     updateGeneratedPrompt();
   }
 
   function moveSilkCentralStep(index, delta) {
     if (!moveInArray(state.silkCentralSteps, index, delta)) return;
     renderSilkCentralSteps();
+    updateCommandValues();
     updateGeneratedPrompt();
     focusRowControl($('silk-body'), index + delta, delta > 0 ? 1 : 0);
+  }
+
+  /* --- Command values ------------------------------------------------------
+     The selected command values in row order, each prefixed with $ and joined
+     by commas: $OpenApplication,$SetWindow,$SelectItem
+     Derived only — rows with no command selected contribute nothing.
+     ---------------------------------------------------------------------- */
+
+  function commandValueString() {
+    return state.silkCentralSteps
+      .map(function (s) { return trim(s.command); })
+      .filter(function (v) { return v.length > 0; })
+      .map(function (v) { return '$' + v; })
+      .join(',');
+  }
+
+  function updateCommandValues() {
+    var container = $('silk-values');
+    var value = commandValueString();
+
+    clear(container);
+
+    if (!value) {
+      container.appendChild(el('span', 'path__empty',
+        'The command values build themselves as you select commands above.'));
+      return;
+    }
+    container.appendChild(el('code', 'path__code', value));
   }
 
   function moveSilkCentralStepUp(index) { moveSilkCentralStep(index, -1); }
@@ -850,6 +881,13 @@
       if (hasText(s.name)) parts.push(trim(s.name));
       silkBody.push((i + 1) + '. ' + parts.join(' — '));
     });
+    if (silkBody.length) {
+      var commandValues = commandValueString();
+      if (commandValues) {
+        silkBody.push('');
+        silkBody.push(L.commandValues + ': ' + commandValues);
+      }
+    }
     section(out, H.silkCentralSteps, silkBody);
 
     /* --- Verification Evidence ------------------------------------------ */
@@ -1137,6 +1175,7 @@
     renderNavigationSteps();
     renderSilkCentralSteps();
     updateNavigationPath();
+    updateCommandValues();
     updateGeneratedPrompt();
   }
 
@@ -1191,6 +1230,8 @@
     updateGeneratedPrompt: updateGeneratedPrompt,
     updateCharacterCount: updateCharacterCount,
     updateNavigationPath: updateNavigationPath,
+    updateCommandValues: updateCommandValues,
+    commandValueString: commandValueString,
     addNavigationStep: addNavigationStep,
     removeNavigationStep: removeNavigationStep,
     moveNavigationStepUp: moveNavigationStepUp,

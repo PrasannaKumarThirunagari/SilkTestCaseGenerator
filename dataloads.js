@@ -631,6 +631,7 @@
       referenceFile: 'Reference filename',
       userStory: 'User story description',
       navigationPath: 'Navigation path',
+      commandValues: 'Command values',
       verificationOperation: 'Verification operation',
       controlAccess: 'Control access',
       controlType: 'Control type',
